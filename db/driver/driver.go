@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 
@@ -12,6 +11,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+const (
+	COLLECTION = "birthdays"
+	DATABASE   = "wadsworth-birthday"
+)
+
 /*
  * Global variables can go here
  */
@@ -19,11 +23,15 @@ var (
 	logger = log.New(os.Stderr, "[DRIVER] ", log.LstdFlags)
 )
 
-type BirthdayDocument struct {
+type GuildUserPair struct {
 	GuildId string
 	UserId  string
-	Day     int
-	Month   int
+}
+
+type BirthdayDocument struct {
+	GuildUserPair GuildUserPair
+	Day           int
+	Month         int
 }
 
 /*
@@ -33,7 +41,7 @@ func loadDotEnv() {
 	logger.Println("Loading .env file...")
 	err := godotenv.Load(".env")
 	if err != nil {
-		logger.Fatalf("Error loading .env file: %v", err)
+		logger.Fatal("Error loading .env file:", err)
 	}
 	logger.Println("Successfully loaded \".env\" file")
 }
@@ -59,14 +67,14 @@ func connectToDB() *mongo.Client {
 	// creating client and connecting to db
 	client, err := mongo.Connect(opts)
 	if err != nil {
-		logger.Fatalf("Failed to connect to DB %v", err)
+		logger.Fatal("Failed to connect to DB:", err)
 		panic(err)
 	}
 
 	// sending a ping to confirm a successful connection
 	var result bson.M
-	if err := client.Database("admin").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Decode(&result); err != nil {
-		fmt.Println("Something failed:", err)
+	if err := client.Database(DATABASE).RunCommand(context.TODO(), bson.D{{"ping", 1}}).Decode(&result); err != nil {
+		logger.Println("Couldn't ping DB:", err)
 		panic(err)
 	}
 	logger.Println("Successfully connected to DB")
@@ -76,12 +84,28 @@ func connectToDB() *mongo.Client {
 
 func insertBirthday(doc BirthdayDocument, client *mongo.Client) error {
 	logger.Println("Inserting birthday document...")
-	coll := client.Database("wadsworth").Collection(doc.GuildId)
+	coll := client.Database(DATABASE).Collection(COLLECTION)
 	result, err := coll.InsertOne(context.TODO(), doc)
 	if err != nil {
-		fmt.Println("Failed to insert birthday document: ", err)
+		logger.Println("Failed to insert birthday document:", err)
 	} else {
 		logger.Println("Inserted document with _id:", result.InsertedID)
+	}
+	return err
+}
+
+func deleteBirthday(guildUserPair GuildUserPair, client *mongo.Client) error {
+	logger.Println("Deleting birthday...")
+	filter := bson.M{
+		"guilduserpair.guildid": guildUserPair.GuildId,
+		"guilduserpair.userid":  guildUserPair.UserId,
+	}
+	coll := client.Database(DATABASE).Collection(COLLECTION)
+	result, err := coll.DeleteOne(context.TODO(), filter)
+	if err != nil {
+		logger.Println("Failed to delete birthday document:", err)
+	} else {
+		logger.Println("Deleted document with _id. Count:", result.DeletedCount)
 	}
 	return err
 }
@@ -93,11 +117,30 @@ func main() {
 	// connecting to db
 	client := connectToDB()
 
-	testBirthdayDoc := BirthdayDocument{
-		GuildId: "some_server_id",
+	guildUserPair1 := GuildUserPair{
+		GuildId: "some_server_id_1",
 		UserId:  "PacoDaTaco",
-		Day:     31,
-		Month:   10,
 	}
-	insertBirthday(testBirthdayDoc, client)
+
+	// guildUserPair2 := GuildUserPair{
+	// 	GuildId: "some_server_id_2",
+	// 	UserId:  "PacoDaTaco",
+	// }
+
+	// testBirthdayDoc1 := BirthdayDocument{
+	// 	GuildUserPair: guildUserPair1,
+	// 	Day:           31,
+	// 	Month:         10,
+	// }
+
+	// testBirthdayDoc2 := BirthdayDocument{
+	// 	GuildUserPair: guildUserPair2,
+	// 	Day:           31,
+	// 	Month:         10,
+	// }
+
+	// insertBirthday(testBirthdayDoc1, client)
+	// insertBirthday(testBirthdayDoc2, client)
+
+	deleteBirthday(guildUserPair1, client)
 }
