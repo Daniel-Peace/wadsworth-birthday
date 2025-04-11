@@ -73,7 +73,7 @@ func connectToDB() *mongo.Client {
 
 	// sending a ping to confirm a successful connection
 	var result bson.M
-	if err := client.Database(DATABASE).RunCommand(context.TODO(), bson.D{{"ping", 1}}).Decode(&result); err != nil {
+	if err := client.Database(DATABASE).RunCommand(context.TODO(), bson.M{"ping": 1}).Decode(&result); err != nil {
 		logger.Println("Couldn't ping DB:", err)
 		panic(err)
 	}
