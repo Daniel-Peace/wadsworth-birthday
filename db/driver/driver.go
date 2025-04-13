@@ -2,10 +2,9 @@ package main
 
 import (
 	"context"
+	"driver/db"
 	"log"
 	"os"
-	"strconv"
-	"time"
 
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -39,7 +38,7 @@ var (
  * Log strings
  */
 var (
-	Working_status = "Working"
+	Working_status = "WORKING"
 	Success_status = "SUCCESS"
 	Error_status   = "ERROR"
 )
@@ -47,17 +46,6 @@ var (
 var (
 	logger = log.New(os.Stderr, "[DRIVER] ", log.LstdFlags)
 )
-
-type GuildUserPair struct {
-	GuildId string
-	UserId  string
-}
-
-type BirthdayDocument struct {
-	GuildUserPair GuildUserPair
-	Day           int
-	Month         int
-}
 
 func colorizeString(s string, c Color) string {
 	return string(c) + s + string(Reset)
@@ -79,7 +67,7 @@ func loadDotEnv() {
  * Connects driver to db
  */
 func connectToDB() *mongo.Client {
-	logger.Printf("[%s] [%s] Connecting to DB...", colorizeString("connectToDB", Magenta), colorizeString(Working_status, Yellow))
+	logger.Printf("[%s] [%s] - Connecting to DB...", colorizeString("connectToDB", Magenta), colorizeString(Working_status, Yellow))
 
 	// getting the URI from the .env
 	var uri string
@@ -111,111 +99,6 @@ func connectToDB() *mongo.Client {
 	return client
 }
 
-func insertBirthday(doc BirthdayDocument, client *mongo.Client) error {
-	var err error
-	logger.Println("Inserting birthday document...")
-	if result, _ := birthdayExists(doc.GuildUserPair, client); result {
-		logger.Println("birthday already entered")
-	} else {
-		coll := client.Database(DATABASE_NAME).Collection(COLLECTION_NAME)
-		result, err := coll.InsertOne(context.TODO(), doc)
-		if err != nil {
-			logger.Println("Failed to insert birthday document:", err)
-		} else {
-			logger.Println("Inserted document with _id:", result.InsertedID)
-		}
-	}
-	return err
-}
-
-func deleteBirthday(guildUserPair GuildUserPair, client *mongo.Client) error {
-	logger.Println("Deleting birthday...")
-	filter := bson.M{
-		"guilduserpair.guildid": guildUserPair.GuildId,
-		"guilduserpair.userid":  guildUserPair.UserId,
-	}
-	coll := client.Database(DATABASE_NAME).Collection(COLLECTION_NAME)
-	result, err := coll.DeleteOne(context.TODO(), filter)
-	if err != nil {
-		logger.Println("Failed to delete birthday document:", err)
-	} else {
-		logger.Printf("Attempted to delete %s's birthday from guild %s. Count: %s\n",
-			colorizeString(guildUserPair.UserId, Magenta),
-			colorizeString(guildUserPair.GuildId, Cyan),
-			colorizeString(strconv.FormatInt(result.DeletedCount, 10), Blue),
-		)
-	}
-	return err
-}
-
-func getBirhtday(guildUserPair GuildUserPair, client *mongo.Client) (BirthdayDocument, error) {
-	logger.Println("Retrieving birthday...")
-	filter := bson.M{
-		"guilduserpair.guildid": guildUserPair.GuildId,
-		"guilduserpair.userid":  guildUserPair.UserId,
-	}
-	opts := options.FindOne()
-	coll := client.Database(DATABASE_NAME).Collection(COLLECTION_NAME)
-	var birthday BirthdayDocument
-	err := coll.FindOne(context.TODO(), filter, opts).Decode(&birthday)
-	if err != nil {
-		logger.Printf("No birthday found: %s\n", colorizeString(err.Error(), Red))
-	} else {
-		logger.Printf("Retrieved %s's birthday from guild %s.\n",
-			colorizeString(guildUserPair.UserId, Magenta),
-			colorizeString(guildUserPair.GuildId, Cyan),
-		)
-	}
-	return birthday, err
-}
-
-func birthdayExists(guildUserPair GuildUserPair, client *mongo.Client) (bool, error) {
-	filter := bson.M{
-		"guilduserpair.guildid": guildUserPair.GuildId,
-		"guilduserpair.userid":  guildUserPair.UserId,
-	}
-	coll := client.Database(DATABASE_NAME).Collection(COLLECTION_NAME)
-	count, err := coll.CountDocuments(context.TODO(), filter)
-	if err != nil {
-		logger.Printf("An error accured while checking if that birthday existed: %s\n", colorizeString(err.Error(), Red))
-		return false, err
-	} else {
-		logger.Printf("Checked for %s's birthday from guild %s. Found: %s\n",
-			colorizeString(guildUserPair.UserId, Magenta),
-			colorizeString(guildUserPair.GuildId, Cyan),
-			colorizeString(strconv.FormatInt(count, 10), Blue),
-		)
-		return (count > 0), err
-	}
-}
-
-func getActiveBirthdays(guildId string, client *mongo.Client) []BirthdayDocument {
-	currentTime := time.Now()
-
-	currentMonth := currentTime.Month()
-	currentDay := currentTime.Day()
-	filter := bson.M{
-		"guilduserpair.guildid": guildId,
-		"month":                 currentMonth,
-		"day":                   currentDay,
-	}
-	coll := client.Database(DATABASE_NAME).Collection(COLLECTION_NAME)
-
-	cursor, err := coll.Find(context.TODO(), filter)
-	if err != nil {
-		panic(err)
-	}
-	var results []BirthdayDocument
-	if err = cursor.All(context.TODO(), &results); err != nil {
-		panic(err)
-	}
-	logger.Printf(
-		"Found %s active birthday(s) from guild %s",
-		colorizeString(strconv.Itoa(len(results)), Blue),
-		colorizeString(guildId, Cyan))
-	return results
-}
-
 func main() {
 	// loading .env
 	loadDotEnv()
@@ -223,49 +106,70 @@ func main() {
 	// connecting to db
 	client := connectToDB()
 
-	guildUserPair1 := GuildUserPair{
+	// creating new instance of mongodb
+	database := db.NewMongoDB(client, DATABASE_NAME, COLLECTION_NAME)
+
+	guildUserPair1 := db.GuildUserPair{
 		GuildId: "some_server_id_1",
 		UserId:  "PacoDaTaco",
 	}
 
-	guildUserPair2 := GuildUserPair{
+	guildUserPair2 := db.GuildUserPair{
 		GuildId: "some_server_id_2",
 		UserId:  "PacoDaTaco",
 	}
 
-	guildUserPair3 := GuildUserPair{
+	guildUserPair3 := db.GuildUserPair{
 		GuildId: "some_server_id_2",
 		UserId:  "GenericUser",
 	}
 
-	testBirthdayDoc1 := BirthdayDocument{
+	testBirthdayDoc1 := db.BirthdayDocument{
 		GuildUserPair: guildUserPair1,
 		Day:           31,
 		Month:         10,
 	}
 
-	testBirthdayDoc2 := BirthdayDocument{
+	testBirthdayDoc2 := db.BirthdayDocument{
 		GuildUserPair: guildUserPair2,
 		Day:           31,
 		Month:         10,
 	}
 
-	testBirthdayDoc3 := BirthdayDocument{
+	testBirthdayDoc3 := db.BirthdayDocument{
 		GuildUserPair: guildUserPair3,
 		Day:           12,
 		Month:         4,
 	}
 
-	deleteBirthday(guildUserPair3, client)
+	filter1 := bson.M{
+		"guilduserpair.guildid": guildUserPair1.GuildId,
+		"guilduserpair.userid":  guildUserPair1.UserId,
+	}
 
-	insertBirthday(testBirthdayDoc1, client)
-	insertBirthday(testBirthdayDoc2, client)
-	insertBirthday(testBirthdayDoc3, client)
+	filter2 := bson.M{
+		"guilduserpair.guildid": guildUserPair2.GuildId,
+		"guilduserpair.userid":  guildUserPair2.UserId,
+	}
 
-	// exists, err := birthdayExists(guildUserPair2, client)
-	// if exists && err == nil {
-	// 	getBirhtday(guildUserPair1, client)
-	// 	fmt.Println(getBirhtday(guildUserPair2, client))
-	// }
-	getActiveBirthdays(guildUserPair2.GuildId, client)
+	filter3 := bson.M{
+		"guilduserpair.guildid": guildUserPair3.GuildId,
+		"guilduserpair.userid":  guildUserPair3.UserId,
+	}
+
+	database.DeleteOne(context.TODO(), filter1)
+	database.DeleteOne(context.TODO(), filter2)
+	database.DeleteOne(context.TODO(), filter3)
+
+	database.FindOne(context.TODO(), filter1)
+	database.FindOne(context.TODO(), filter2)
+	database.FindOne(context.TODO(), filter3)
+
+	database.InsertOne(context.TODO(), testBirthdayDoc1)
+	database.InsertOne(context.TODO(), testBirthdayDoc2)
+	database.InsertOne(context.TODO(), testBirthdayDoc3)
+
+	database.FindOne(context.TODO(), filter1)
+	database.FindOne(context.TODO(), filter2)
+	database.FindOne(context.TODO(), filter3)
 }
