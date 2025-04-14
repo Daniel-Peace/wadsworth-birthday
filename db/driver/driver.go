@@ -107,7 +107,7 @@ func main() {
 	client := connectToDB()
 
 	// creating new instance of mongodb
-	database := db.NewMongoDB(client, DATABASE_NAME, COLLECTION_NAME)
+	database := db.NewMongoDB(client, DATABASE_NAME, COLLECTION_NAME, logger)
 
 	guildUserPair1 := db.GuildUserPair{
 		GuildId: "some_server_id_1",
@@ -138,8 +138,8 @@ func main() {
 
 	testBirthdayDoc3 := db.BirthdayDocument{
 		GuildUserPair: guildUserPair3,
-		Day:           12,
-		Month:         4,
+		Day:           31,
+		Month:         10,
 	}
 
 	filter1 := bson.M{
@@ -157,6 +157,12 @@ func main() {
 		"guilduserpair.userid":  guildUserPair3.UserId,
 	}
 
+	filter4 := bson.M{
+		"guilduserpair.guildid": "some_server_id_2",
+		"day":                   31,
+		"month":                 10,
+	}
+
 	database.DeleteOne(context.TODO(), filter1)
 	database.DeleteOne(context.TODO(), filter2)
 	database.DeleteOne(context.TODO(), filter3)
@@ -172,4 +178,6 @@ func main() {
 	database.FindOne(context.TODO(), filter1)
 	database.FindOne(context.TODO(), filter2)
 	database.FindOne(context.TODO(), filter3)
+
+	database.FindAll(context.TODO(), filter4)
 }
