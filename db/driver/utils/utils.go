@@ -16,6 +16,16 @@ var (
 	White   AnsiColor = "\033[97m"
 )
 
+/*
+ * Log strings
+ */
+var (
+	WORKING_STATUS = "WORKING"
+	SUCCESS_STATUS = "SUCCESS"
+	DATA           = "DATA"
+	ERROR_STATUS   = "ERROR"
+)
+
 // This function takes a string to colorize and the desired color.
 // It returns a string with the color code as a prefix and the reset code as a postfix.
 func ColorizeString(s string, c AnsiColor) string {
