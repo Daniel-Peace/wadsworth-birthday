@@ -22,10 +22,6 @@ const (
 	DATABASE_NAME   = "wadsworth-birthday"
 )
 
-var (
-	log = logger.NewGoLogger("DRIVER", os.Stdout, true, true, true)
-)
-
 type DBResponseStatus int
 
 const (
@@ -33,6 +29,10 @@ const (
 	CONFLICT
 	NOT_POSSIBLE
 	ERROR
+)
+
+var (
+	log = logger.NewGoLogger("DRIVER", os.Stdout, true, true, true)
 )
 
 type Server struct {
