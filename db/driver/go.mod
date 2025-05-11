@@ -3,6 +3,7 @@ module driver
 go 1.24.1
 
 require (
+	github.com/Daniel-Peace/go-logger v0.0.1
 	github.com/joho/godotenv v1.5.1
 	go.mongodb.org/mongo-driver v1.17.3
 	go.mongodb.org/mongo-driver/v2 v2.2.0

@@ -3,10 +3,9 @@ package db
 import (
 	"context"
 	custom_utils "driver/utils"
-	"fmt"
-	"log"
 	"strconv"
 
+	"github.com/Daniel-Peace/go-logger"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -16,13 +15,13 @@ type MongoDB struct {
 	Client     *mongo.Client
 	Database   string
 	Collection string
-	Logger     *log.Logger
+	Logger     *logger.GoLogger
 }
 
 /*
  * Creates an instance of a mongodb implementation of the BirthdayDatabase interface
  */
-func NewMongoDB(client *mongo.Client, database string, collection string, logger *log.Logger) *MongoDB {
+func NewMongoDB(client *mongo.Client, database string, collection string, logger *logger.GoLogger) *MongoDB {
 	return &MongoDB{
 		Client:     client,
 		Database:   database,
@@ -31,61 +30,33 @@ func NewMongoDB(client *mongo.Client, database string, collection string, logger
 	}
 }
 
-/*
- * Inserts a birthday document
- */
+// Inserts the given birthday document
 func (m *MongoDB) InsertOne(context context.Context, doc BirthdayDocument) error {
-	m.Logger.Printf("[%s] [%s]",
-		custom_utils.ColorizeString("InsertOne", custom_utils.Magenta),
-		custom_utils.ColorizeString(custom_utils.WORKING_STATUS, custom_utils.Yellow),
-	)
+	m.Logger.StatusPrintln(logger.IN_PROGRESS, "Inserting document...")
 	coll := m.Client.Database(m.Database).Collection(m.Collection)
 	result, err := coll.InsertOne(context, doc)
 	if err != nil {
-		m.Logger.Printf("[%s] [%s] - Failed to insert doc: %v",
-			custom_utils.ColorizeString("InsertOne", custom_utils.Magenta),
-			custom_utils.ColorizeString(custom_utils.ERROR_STATUS, custom_utils.Red),
-			err,
-		)
+		m.Logger.StatusPrintf(logger.ERROR, "Failed to insert doc: %v", err)
 	} else {
-		m.Logger.Printf("[%s] [%s] - Inserted doc with %s",
-			custom_utils.ColorizeString("InsertOne", custom_utils.Magenta),
-			custom_utils.ColorizeString(custom_utils.SUCCESS_STATUS, custom_utils.Green),
-			custom_utils.ColorizeString(fmt.Sprintf("%s", result.InsertedID), custom_utils.Blue),
-		)
+		m.Logger.StatusPrintf(logger.SUCCESS, "Inserted doc with id \"%s\"", result.InsertedID)
 	}
 	return err
 }
 
-/*
- * Deletes a birthday document
- */
+// Deletes the first document that matches the provided filter
 func (m *MongoDB) DeleteOne(context context.Context, filter bson.M) error {
-	m.Logger.Printf("[%s] [%s]",
-		custom_utils.ColorizeString("DeleteOne", custom_utils.Magenta),
-		custom_utils.ColorizeString(custom_utils.WORKING_STATUS, custom_utils.Yellow),
-	)
+	m.Logger.StatusPrintln(logger.IN_PROGRESS, "Deleting document...")
 	coll := m.Client.Database(m.Database).Collection(m.Collection)
 	result, err := coll.DeleteOne(context, filter)
 	if err != nil {
-		m.Logger.Printf("[%s] [%s] - Failed to insert doc: %v",
-			custom_utils.ColorizeString("DeleteOne", custom_utils.Magenta),
-			custom_utils.ColorizeString(custom_utils.ERROR_STATUS, custom_utils.Red),
-			err,
-		)
+		m.Logger.StatusPrintf(logger.ERROR, "Failed to insert doc: %v", err)
 	} else {
-		m.Logger.Printf("[%s] [%s] - Deleted doc: Count %s",
-			custom_utils.ColorizeString("DeleteOne", custom_utils.Magenta),
-			custom_utils.ColorizeString(custom_utils.SUCCESS_STATUS, custom_utils.Green),
-			custom_utils.ColorizeString(strconv.FormatInt(result.DeletedCount, 10), custom_utils.Blue),
-		)
+		m.Logger.StatusPrintf(logger.SUCCESS, "Deleted doc: Count %d", result.DeletedCount)
 	}
 	return err
 }
 
-/*
- * Finds the first doc matching the filter
- */
+// Finds the first doc matching the given filter
 func (m *MongoDB) FindOne(context context.Context, filter bson.M) (BirthdayDocument, error) {
 	m.Logger.Printf("[%s] [%s]",
 		custom_utils.ColorizeString("FindOne", custom_utils.Magenta),

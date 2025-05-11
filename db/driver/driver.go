@@ -3,14 +3,14 @@ package main
 import (
 	"context"
 	"driver/db"
-	custom_utils "driver/utils"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 
+	"github.com/Daniel-Peace/go-logger"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -23,48 +23,47 @@ const (
 )
 
 var (
-	logger = log.New(os.Stderr, "[DRIVER] ", log.LstdFlags)
+	log = logger.NewGoLogger("DRIVER", os.Stdout, true, true, true)
 )
 
-/*
- * Loads the .env
- */
-func loadDotEnv() {
-	logger.Printf("[%s] [%s] - Loading .env file...",
-		custom_utils.ColorizeString("loadDotEnv", custom_utils.Magenta),
-		custom_utils.ColorizeString(custom_utils.WORKING_STATUS, custom_utils.Yellow),
-	)
-	err := godotenv.Load(".env")
-	if err != nil {
-		logger.Fatalf("[%s] [%s] - %v",
-			custom_utils.ColorizeString("loadDotEnv", custom_utils.Magenta),
-			custom_utils.ColorizeString(custom_utils.ERROR_STATUS, custom_utils.Red),
-			err,
-		)
-	}
-	logger.Printf("[%s] [%s]",
-		custom_utils.ColorizeString("loadDotEnv", custom_utils.Magenta),
-		custom_utils.ColorizeString(custom_utils.SUCCESS_STATUS, custom_utils.Green),
-	)
+type DBResponseStatus int
+
+const (
+	SUCCESS DBResponseStatus = iota
+	CONFLICT
+	NOT_POSSIBLE
+	ERROR
+)
+
+type Server struct {
+	Database *db.MongoDB
 }
 
-/*
- * Connects driver to db
- */
+type ResponseBody struct {
+	status_code int
+	Status      DBResponseStatus
+	Description string
+	Data        string
+}
+
+// Loads the .env
+func loadDotEnv() {
+	log.StatusPrintln(logger.IN_PROGRESS, "Loading .env file...")
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.StatusFatalf(logger.ERROR, "%v", err)
+	}
+	log.StatusPrintln(logger.SUCCESS, "Successfully loaded .env")
+}
+
+// Connects driver to db
 func connectToDB() *mongo.Client {
-	logger.Printf("[%s] [%s] - Connecting to DB...",
-		custom_utils.ColorizeString("connectToDB", custom_utils.Magenta),
-		custom_utils.ColorizeString(custom_utils.WORKING_STATUS, custom_utils.Yellow),
-	)
+	log.StatusPrint(logger.IN_PROGRESS, "Connecting to DB...")
 
 	// getting the URI from the .env
 	var uri string
 	if uri = os.Getenv("MONGODB_URI"); uri == "" {
-		logger.Fatalf("[%s] [%s] - %s",
-			custom_utils.ColorizeString("connectToDB", custom_utils.Magenta),
-			custom_utils.ColorizeString(custom_utils.ERROR_STATUS, custom_utils.Red),
-			"Failed to find environment variable MONGODB_URI",
-		)
+		log.StatusFatalln(logger.ERROR, "Failed to find environment variable MONGODB_URI")
 	}
 
 	// sedtting API version
@@ -76,124 +75,183 @@ func connectToDB() *mongo.Client {
 	// creating client and connecting to db
 	client, err := mongo.Connect(opts)
 	if err != nil {
-		logger.Fatalf("[%s] [%s] - %v",
-			custom_utils.ColorizeString("connectToDB", custom_utils.Magenta),
-			custom_utils.ColorizeString(custom_utils.ERROR_STATUS, custom_utils.Red),
-			err,
-		)
+		log.StatusFatalf(logger.ERROR, "%v", err)
 	}
 
 	// sending a ping to confirm a successful connection
 	var result bson.M
 	if err := client.Database(DATABASE_NAME).RunCommand(context.TODO(), bson.M{"ping": 1}).Decode(&result); err != nil {
-		logger.Fatalf("[%s] [%s] - %v",
-			custom_utils.ColorizeString("connectToDB", custom_utils.Magenta),
-			custom_utils.ColorizeString(custom_utils.ERROR_STATUS, custom_utils.Red),
-			err,
-		)
+		log.StatusFatalf(logger.ERROR, "%v", err)
 	}
-
-	logger.Printf("[%s] [%s]",
-		custom_utils.ColorizeString("connectToDB", custom_utils.Magenta),
-		custom_utils.ColorizeString(custom_utils.SUCCESS_STATUS, custom_utils.Green),
-	)
-
+	log.StatusPrint(logger.SUCCESS, "Successfully connected to the DB")
 	return client
 }
 
-type BirthdayPostRequest struct {
-	ServerId string
-	UserId   string
-	Day      int
-	Month    int
+func sendJsonResponse[T any](status_code int, body T, w http.ResponseWriter) error {
+	// marshalling data
+	bodyAsJson, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	// setting and writing haeder
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status_code)
+
+	// writing body
+	_, err = w.Write(bodyAsJson)
+	return err
 }
 
-type Server struct {
-	Database *db.MongoDB
+func buildAndSendResponse(w http.ResponseWriter, status_code int, status DBResponseStatus, description string, data string) {
+	// building response
+	body := ResponseBody{
+		status_code: status_code,
+		Status:      status,
+		Description: description,
+		Data:        data,
+	}
+
+	// sending response
+	err := sendJsonResponse(status_code, body, w)
+	sendFallbackIfError(w, err)
+	return
 }
 
-func (s *Server) checkForBirthday(w http.ResponseWriter, r *http.Request) {
-
+func sendFallbackResponse(w http.ResponseWriter) {
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }
 
-func (s *Server) getActiveBirthdays(w http.ResponseWriter, r *http.Request) {
-
+func sendFallbackIfError(w http.ResponseWriter, err error) {
+	if err != nil {
+		log.StatusPrintf(logger.ERROR, "%v", err)
+		sendFallbackResponse(w)
+	}
 }
 
-func (s *Server) updateBirthday(w http.ResponseWriter, r *http.Request) {
+// Reads the body of the request and parses it into a struct
+func parseRequestBody[T any](r *http.Request) (T, error) {
+	var document T
 
-}
-
-func (s *Server) insertBirthday(w http.ResponseWriter, r *http.Request) {
+	// reading body from request
+	log.StatusPrintln(logger.IN_PROGRESS, "Reading request body")
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Error reading request body", http.StatusBadRequest)
-		return
+		log.StatusPrintf(logger.ERROR, "%v", err)
+		return document, err
 	}
 	defer r.Body.Close()
 
-	logger.Printf("[%s] [%s] - Unmarshling json...",
-		custom_utils.ColorizeString("insertBirthday", custom_utils.Magenta),
-		custom_utils.ColorizeString(custom_utils.WORKING_STATUS, custom_utils.Yellow),
-	)
-	var birthdayDocument db.BirthdayDocument
-	err = json.Unmarshal(body, &birthdayDocument)
+	// unmarshalling the body
+	log.StatusPrintln(logger.IN_PROGRESS, "Unmarshling json...")
+	err = json.Unmarshal(body, &document)
 	if err != nil {
-		logger.Printf("[%s] [%s] - %v",
-			custom_utils.ColorizeString("insertBirthday", custom_utils.Magenta),
-			custom_utils.ColorizeString(custom_utils.ERROR_STATUS, custom_utils.Red),
-			err,
-		)
+		log.StatusPrintf(logger.ERROR, "%v", err)
+		return document, err
 	} else {
-		logger.Printf("[%s] [%s] - Good json!",
-			custom_utils.ColorizeString("insertBirthday", custom_utils.Magenta),
-			custom_utils.ColorizeString(custom_utils.SUCCESS_STATUS, custom_utils.Green),
-		)
-		logger.Printf("[%s] [%s]\n--- JSON ---\n%s\n--- END ----",
-			custom_utils.ColorizeString("insertBirthday", custom_utils.Magenta),
-			custom_utils.ColorizeString(custom_utils.DATA, custom_utils.Blue),
-			custom_utils.ColorizeString(string(body), custom_utils.Cyan),
-		)
+		log.StatusPrintln(logger.SUCCESS, "Good json!")
+		log.Printf("\n--- JSON ---\n%s\n--- END ----", string(body))
 	}
+	return document, err
+}
 
+// Checks if a given birthday exists
+func birthdayExists(s *Server, document db.BirthdayDocument) (bool, error) {
+	log.StatusPrintln(logger.IN_PROGRESS, "Checking if birthday exists...")
+
+	// creating filter
 	filter := bson.M{
-		"guilduserpair.guildid": birthdayDocument.GuildUserPair.GuildId,
-		"guilduserpair.userid":  birthdayDocument.GuildUserPair.UserId,
+		"guilduserpair.guildid": document.GuildUserPair.GuildId,
+		"guilduserpair.userid":  document.GuildUserPair.UserId,
 	}
 
-	_, err = s.Database.FindOne(context.TODO(), filter)
+	// checking if birthday exists
+	_, err := s.Database.FindOne(context.TODO(), filter)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			logger.Printf("[%s] [%s] - Birthday not found",
-				custom_utils.ColorizeString("insertBirthday", custom_utils.Magenta),
-				custom_utils.ColorizeString(custom_utils.SUCCESS_STATUS, custom_utils.Green),
-			)
-
-			err = s.Database.InsertOne(context.TODO(), birthdayDocument)
-			if err != nil {
-				logger.Printf("[%s] [%s] - %v",
-					custom_utils.ColorizeString("insertBirthday", custom_utils.Magenta),
-					custom_utils.ColorizeString(custom_utils.ERROR_STATUS, custom_utils.Red),
-					err,
-				)
-			} else {
-				logger.Printf("[%s] [%s] - Added birthday to database",
-					custom_utils.ColorizeString("insertBirthday", custom_utils.Magenta),
-					custom_utils.ColorizeString(custom_utils.SUCCESS_STATUS, custom_utils.Green),
-				)
-			}
-		} else {
-			logger.Printf("[%s] [%s] - %v",
-				custom_utils.ColorizeString("insertBirthday", custom_utils.Magenta),
-				custom_utils.ColorizeString(custom_utils.ERROR_STATUS, custom_utils.Red),
-				err,
-			)
+			return false, nil
 		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *Server) insertBirthday(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received request of type: %s", r.Method)
+
+	// checking if its a valid http method for this endpoint
+	log.StatusPrintln(logger.IN_PROGRESS, "Validating http method...")
+	if r.Method != http.MethodPut {
+		log.StatusPrintf(logger.ERROR, "%s", http.StatusText(http.StatusMethodNotAllowed))
+		w.Header().Set("Allow", http.MethodPut)
+		buildAndSendResponse(w, http.StatusMethodNotAllowed, ERROR, http.StatusText(http.StatusMethodNotAllowed), "")
+		return
+	}
+	log.StatusPrintln(logger.SUCCESS, "Http method is valid")
+
+	// parsing body of request
+	log.StatusPrintln(logger.IN_PROGRESS, "Parsing request body...")
+	birthdayDocument, err := parseRequestBody[db.BirthdayDocument](r)
+	if err != nil {
+		log.StatusPrintf(logger.ERROR, "%v", err)
+		buildAndSendResponse(w, http.StatusBadRequest, ERROR, "Failed to parse body of request", "")
+		return
+	}
+	log.StatusPrintln(logger.SUCCESS, "Successfully parsed body")
+
+	// checking if birthday already exists in db
+	exists, err := birthdayExists(s, birthdayDocument)
+	if err != nil {
+		buildAndSendResponse(w, http.StatusInternalServerError, ERROR, "Failed when checking db for birthday", "")
+		return
+	}
+
+	if exists {
+		bodyAsJson := ResponseBody{
+			status_code: http.StatusOK,
+			Status:      CONFLICT,
+			Description: "Birthday already exists",
+			Data:        "",
+		}
+		log.Println("Birthday already exists")
+		err = sendJsonResponse[ResponseBody](http.StatusOK, bodyAsJson, w)
+		sendFallbackIfError(w, err)
+		return
+	}
+
+	log.StatusPrintln(logger.IN_PROGRESS, "Adding birthday to database...")
+	err = s.Database.InsertOne(context.TODO(), birthdayDocument)
+	if err != nil {
+		log.StatusPrintf(logger.ERROR, "%v", err)
+		buildAndSendResponse(w, http.StatusInternalServerError, ERROR, err.Error(), "")
+		return
+	}
+}
+
+func (s *Server) checkForBirthday(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received request of type: %s", r.Method)
+	if r.Method != http.MethodGet {
+
 	} else {
-		logger.Printf("[%s] [%s] - Birthday already exists",
-			custom_utils.ColorizeString("insertBirthday", custom_utils.Magenta),
-			custom_utils.ColorizeString(custom_utils.SUCCESS_STATUS, custom_utils.Green),
-		)
+
+	}
+}
+
+func (s *Server) getActiveBirthdays(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received request of type: %s", r.Method)
+	if r.Method != http.MethodGet {
+
+	} else {
+
+	}
+}
+
+func (s *Server) updateBirthday(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received request of type: %s", r.Method)
+	if r.Method != http.MethodPost {
+
+	} else {
+
 	}
 }
 
@@ -205,7 +263,7 @@ func main() {
 	client := connectToDB()
 
 	// creating new instance of mongodb
-	database := db.NewMongoDB(client, DATABASE_NAME, COLLECTION_NAME, logger)
+	database := db.NewMongoDB(client, DATABASE_NAME, COLLECTION_NAME, log)
 
 	// creating an instance of the server struct to pass the db onto the handlers
 	server := &Server{
@@ -220,17 +278,10 @@ func main() {
 	http.HandleFunc("/delete-bday", server.insertBirthday)
 
 	// starting http server
-	logger.Printf("[%s] [%s] - Starting http srever...",
-		custom_utils.ColorizeString("main", custom_utils.Magenta),
-		custom_utils.ColorizeString(custom_utils.WORKING_STATUS, custom_utils.Yellow),
-	)
+	log.StatusPrintln(logger.IN_PROGRESS, "Starting http server")
 	err := http.ListenAndServe(":9000", nil)
 	if err != nil {
-		logger.Fatalf("[%s] [%s] - %v",
-			custom_utils.ColorizeString("main", custom_utils.Magenta),
-			custom_utils.ColorizeString(custom_utils.ERROR_STATUS, custom_utils.Red),
-			err,
-		)
+		log.StatusFatalf(logger.ERROR, "%v", err)
 	}
 
 	// guildUserPair1 := db.GuildUserPair{
@@ -304,6 +355,7 @@ func main() {
 	// database.FindOne(context.TODO(), filter3)
 
 	// database.FindAll(context.TODO(), filter4)
+	fmt.Println()
 }
 
 // {"guilduserpair": { "guildid": "some_server_id_2", "userid": "GenericUser" },"day": 31,"month": 10}
