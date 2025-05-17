@@ -103,7 +103,7 @@ func sendJsonResponse[T any](status_code int, body T, w http.ResponseWriter) err
 	return err
 }
 
-func buildAndSendResponse(w http.ResponseWriter, status_code int, status DBResponseStatus, description string, data string) {
+func buildAndSendResponse(w http.ResponseWriter, status_code int, status DBResponseStatus, description string, data string) error {
 	// building response
 	body := ResponseBody{
 		status_code: status_code,
@@ -113,9 +113,7 @@ func buildAndSendResponse(w http.ResponseWriter, status_code int, status DBRespo
 	}
 
 	// sending response
-	err := sendJsonResponse(status_code, body, w)
-	sendFallbackIfError(w, err)
-	return
+	return sendJsonResponse(status_code, body, w)
 }
 
 func sendFallbackResponse(w http.ResponseWriter) {
@@ -176,30 +174,21 @@ func birthdayExists(s *Server, document db.BirthdayDocument) (bool, error) {
 	return true, nil
 }
 
+// adds a birthday to the db if it DNE
 func (s *Server) insertBirthday(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received request of type: %s", r.Method)
-
-	// checking if its a valid http method for this endpoint
-	log.StatusPrintln(logger.IN_PROGRESS, "Validating http method...")
 	if r.Method != http.MethodPut {
 		log.StatusPrintf(logger.ERROR, "%s", http.StatusText(http.StatusMethodNotAllowed))
 		w.Header().Set("Allow", http.MethodPut)
 		buildAndSendResponse(w, http.StatusMethodNotAllowed, ERROR, http.StatusText(http.StatusMethodNotAllowed), "")
 		return
 	}
-	log.StatusPrintln(logger.SUCCESS, "Http method is valid")
 
-	// parsing body of request
-	log.StatusPrintln(logger.IN_PROGRESS, "Parsing request body...")
 	birthdayDocument, err := parseRequestBody[db.BirthdayDocument](r)
 	if err != nil {
-		log.StatusPrintf(logger.ERROR, "%v", err)
 		buildAndSendResponse(w, http.StatusBadRequest, ERROR, "Failed to parse body of request", "")
 		return
 	}
-	log.StatusPrintln(logger.SUCCESS, "Successfully parsed body")
 
-	// checking if birthday already exists in db
 	exists, err := birthdayExists(s, birthdayDocument)
 	if err != nil {
 		buildAndSendResponse(w, http.StatusInternalServerError, ERROR, "Failed when checking db for birthday", "")
@@ -207,25 +196,20 @@ func (s *Server) insertBirthday(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if exists {
-		bodyAsJson := ResponseBody{
-			status_code: http.StatusOK,
-			Status:      CONFLICT,
-			Description: "Birthday already exists",
-			Data:        "",
-		}
-		log.Println("Birthday already exists")
-		err = sendJsonResponse[ResponseBody](http.StatusOK, bodyAsJson, w)
+		err := buildAndSendResponse(w, http.StatusOK, CONFLICT, "Birthday already exists", "")
 		sendFallbackIfError(w, err)
 		return
 	}
 
-	log.StatusPrintln(logger.IN_PROGRESS, "Adding birthday to database...")
 	err = s.Database.InsertOne(context.TODO(), birthdayDocument)
 	if err != nil {
-		log.StatusPrintf(logger.ERROR, "%v", err)
-		buildAndSendResponse(w, http.StatusInternalServerError, ERROR, err.Error(), "")
+		err = buildAndSendResponse(w, http.StatusInternalServerError, ERROR, err.Error(), "")
+		sendFallbackIfError(w, err)
 		return
 	}
+
+	err = buildAndSendResponse(w, http.StatusOK, SUCCESS, "Successfully added birthday", "")
+	sendFallbackIfError(w, err)
 }
 
 func (s *Server) checkForBirthday(w http.ResponseWriter, r *http.Request) {
