@@ -1,17 +1,19 @@
 import { SlashCommandBuilder } from "discord.js";
-import type { GuildUserPair, BirthdayDocument } from "../types/Types";
+import type {
+  GuildUserPair,
+  BirthdayDocument,
+  DatabaseResponse,
+} from "../types/Types";
 
 export const prod_ready = false;
 
 export const data = new SlashCommandBuilder()
   .setName("add-birthday")
-  .setDescription(
-    "Saves your birthday to my database so I can wish you a happy birthday.",
-  )
+  .setDescription("Wadsworth adds your birthday to the database")
   .addIntegerOption((option) =>
     option
       .setName("month")
-      .setDescription("The month you were born in")
+      .setDescription("The month you were born in.")
       .setRequired(true)
       .setMinValue(1)
       .setMaxValue(12),
@@ -20,7 +22,7 @@ export const data = new SlashCommandBuilder()
   .addIntegerOption((option) =>
     option
       .setName("day")
-      .setDescription("The day you were born on")
+      .setDescription("The day you were born on.")
       .setRequired(true)
       .setMinValue(1)
       .setMaxValue(31),
@@ -46,19 +48,38 @@ export async function execute(interaction: any) {
 
   console.log(birthdayDocument);
 
-  send_post(birthdayDocument);
-
-  await interaction.reply(`You entered the birthday ${month}/${day}`);
+  put_birthday(birthdayDocument).then((dbResponse) => {
+    switch (dbResponse.Status) {
+      case 0:
+        interaction.reply(
+          `I saved your birthday (${month}/${day}) in my databse and will wish you a happy birthday when the time comes.`,
+        );
+        break;
+      case 1:
+        interaction.reply(
+          `Looks like I already have your birthday saved. If you would like me to update it, feel free to use the \`update-birthday\` command.`,
+        );
+        break;
+      default:
+        interaction.reply(
+          `Bummer! It Looks like something went wrong on my end. Maybe try again a bit later. Sorry about the inconvenience!`,
+        );
+        break;
+    }
+  });
 }
 
-async function send_post(doc: BirthdayDocument) {
-  fetch("http://localhost:9000/insert-bday", {
+async function put_birthday(doc: BirthdayDocument): Promise<DatabaseResponse> {
+  const response = await fetch("http://localhost:9000/insert-bday", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(doc),
-  })
-    .then((response) => response.json())
-    .then((json) => console.log(json));
+  });
+
+  console.log(response);
+
+  const data = await response.json();
+  return data as DatabaseResponse;
 }

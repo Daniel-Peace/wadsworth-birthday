@@ -18,3 +18,9 @@ export interface BirthdayDocument {
   day: number;
   month: number;
 }
+
+export interface DatabaseResponse {
+  Status: number;
+  Description: string;
+  Data: string;
+}
