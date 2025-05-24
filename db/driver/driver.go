@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/Daniel-Peace/go-logger"
 	"github.com/joho/godotenv"
@@ -141,15 +142,29 @@ func parseRequestBody[T any](r *http.Request) (T, error) {
 	defer r.Body.Close()
 
 	// unmarshalling the body
-	log.StatusPrintln(logger.IN_PROGRESS, "Unmarshling json...")
-	err = json.Unmarshal(body, &document)
+
+	d := json.NewDecoder(strings.NewReader(string(body)))
+	d.DisallowUnknownFields()
+	err = d.Decode(&document)
 	if err != nil {
 		log.StatusPrintf(logger.ERROR, "%v", err)
 		return document, err
 	} else {
 		log.StatusPrintln(logger.SUCCESS, "Good json!")
 		log.Printf("\n--- JSON ---\n%s\n--- END ----", string(body))
+		log.Printf("\n--- Struct ---\n%v\n--- END ----", document)
 	}
+
+	// log.StatusPrintln(logger.IN_PROGRESS, "Unmarshling json...")
+	// err = json.Unmarshal(body, &document)
+	// if err != nil {
+	// 	log.StatusPrintf(logger.ERROR, "%v", err)
+	// 	return document, err
+	// } else {
+	// 	log.StatusPrintln(logger.SUCCESS, "Good json!")
+	// 	log.Printf("\n--- JSON ---\n%s\n--- END ----", string(body))
+	// 	log.Printf("\n--- Struct ---\n%v\n--- END ----", document)
+	// }
 	return document, err
 }
 
