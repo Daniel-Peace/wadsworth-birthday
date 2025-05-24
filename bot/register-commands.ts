@@ -1,9 +1,8 @@
 import { REST, Routes, SlashCommandBuilder } from "discord.js";
 import fs from "fs";
 import path from "path";
-import { token, clientId, testGuildId } from "./botConfig.json";
+import { token, clientId, testGuildId1, testGuildId2 } from "./botConfig.json";
 import { exit } from "process";
-import type { Command } from "./types/Types";
 import type { RESTPostAPIApplicationCommandsJSONBody } from "discord.js";
 
 const args = process.argv.slice(2);
@@ -53,11 +52,13 @@ console.log("------------------------");
 
 switch (option) {
   case "all":
-    register_test_commands();
+    register_for_specific_guild(testGuildId1);
+    register_for_specific_guild(testGuildId2);
     register_prod_commands();
     break;
   case "test":
-    register_test_commands();
+    register_for_specific_guild(testGuildId1);
+    register_for_specific_guild(testGuildId2);
     break;
   case "prod":
     register_prod_commands();
@@ -97,10 +98,10 @@ async function register_prod_commands() {
   }
 }
 
-async function register_test_commands() {
+async function register_for_specific_guild(guildId: string) {
   try {
     console.log("Registering commands for the test server...");
-    await rest.put(Routes.applicationGuildCommands(clientId, testGuildId), {
+    await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
       body: test_commands,
     });
     console.log(
