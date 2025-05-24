@@ -154,17 +154,6 @@ func parseRequestBody[T any](r *http.Request) (T, error) {
 		log.Printf("\n--- JSON ---\n%s\n--- END ----", string(body))
 		log.Printf("\n--- Struct ---\n%v\n--- END ----", document)
 	}
-
-	// log.StatusPrintln(logger.IN_PROGRESS, "Unmarshling json...")
-	// err = json.Unmarshal(body, &document)
-	// if err != nil {
-	// 	log.StatusPrintf(logger.ERROR, "%v", err)
-	// 	return document, err
-	// } else {
-	// 	log.StatusPrintln(logger.SUCCESS, "Good json!")
-	// 	log.Printf("\n--- JSON ---\n%s\n--- END ----", string(body))
-	// 	log.Printf("\n--- Struct ---\n%v\n--- END ----", document)
-	// }
 	return document, err
 }
 
