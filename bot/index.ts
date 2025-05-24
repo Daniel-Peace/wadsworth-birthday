@@ -2,7 +2,7 @@ import { Client, Collection, Events, GatewayIntentBits } from "discord.js";
 import { token } from "./botConfig.json";
 import fs from "fs";
 import path from "path";
-import type { Command } from "./types/Command";
+import type { Command } from "./types/Types";
 
 // creating collection for commands
 const client = new Client({ intents: [GatewayIntentBits.Guilds] }) as Client & {

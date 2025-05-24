@@ -7,3 +7,14 @@ export interface Command {
   data: SlashCommandBuilder;
   execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
 }
+
+export interface GuildUserPair {
+  guildId: string;
+  userId: string;
+}
+
+export interface BirthdayDocument {
+  guildUserPair: GuildUserPair;
+  day: number;
+  month: number;
+}
