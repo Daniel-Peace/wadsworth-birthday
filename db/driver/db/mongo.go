@@ -83,6 +83,24 @@ func (m *MongoDB) FindOne(context context.Context, filter bson.M) (BirthdayDocum
 	return birthday, err
 }
 
+func (m *MongoDB) ReplaceOne(context context.Context, doc BirthdayDocument) error {
+	m.Logger.StatusPrintln(logger.IN_PROGRESS, "Replacing document...")
+	coll := m.Client.Database(m.Database).Collection(m.Collection)
+
+	filter := bson.M{
+		"guilduserpair.guildid": doc.GuildUserPair.GuildId,
+		"guilduserpair.userid":  doc.GuildUserPair.UserId,
+	}
+
+	result, err := coll.ReplaceOne(context, filter, doc)
+	if err != nil {
+		m.Logger.StatusPrintf(logger.ERROR, "Failed to replace doc: %v", err)
+	} else {
+		m.Logger.StatusPrintf(logger.SUCCESS, "Replaced %d docs", result.ModifiedCount)
+	}
+	return err
+}
+
 /*
  * Finds all docs matching the filter
  */

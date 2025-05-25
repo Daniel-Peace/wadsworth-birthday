@@ -16,8 +16,8 @@ export async function execute(interaction: any) {
 
   // create doc to send
   const guildUserPair: GuildUserPair = {
-    guildId: guildId,
-    userId: userId,
+    GuildId: guildId,
+    UserId: userId,
   };
 
   console.log(guildUserPair);

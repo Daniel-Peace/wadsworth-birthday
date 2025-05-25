@@ -8,8 +8,8 @@ import type {
 export const prod_ready = false;
 
 export const data = new SlashCommandBuilder()
-  .setName("add-birthday")
-  .setDescription("Wadsworth adds your birthday to the database")
+  .setName("update-birthday")
+  .setDescription("Wadsworth udpates your birthday in the database")
   .addIntegerOption((option) =>
     option
       .setName("month")
@@ -51,13 +51,11 @@ export async function execute(interaction: any) {
   put_birthday(birthdayDocument).then((dbResponse) => {
     switch (dbResponse.Status) {
       case 0:
-        interaction.reply(
-          `I saved your birthday (${month}/${day}) in my databse and will wish you a happy birthday when the time comes.`,
-        );
+        interaction.reply(`I updated your birthday to ${month}/${day}.`);
         break;
       case 1:
         interaction.reply(
-          `Looks like I already have your birthday saved. If you would like me to update it, feel free to use the \`update-birthday\` command.`,
+          `Looks like there is no birthday to update, but you can add your birthday using the \`add-birthday\` command.`,
         );
         break;
       default:
@@ -70,7 +68,7 @@ export async function execute(interaction: any) {
 }
 
 async function put_birthday(doc: BirthdayDocument): Promise<DatabaseResponse> {
-  const response = await fetch("http://localhost:9000/insert-bday", {
+  const response = await fetch("http://localhost:9000/update-bday", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",

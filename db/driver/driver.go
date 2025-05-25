@@ -183,19 +183,22 @@ func (s *Server) insertBirthday(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		log.StatusPrintf(logger.ERROR, "%s", http.StatusText(http.StatusMethodNotAllowed))
 		w.Header().Set("Allow", http.MethodPut)
-		buildAndSendResponse(w, http.StatusMethodNotAllowed, ERROR, http.StatusText(http.StatusMethodNotAllowed), "")
+		err := buildAndSendResponse(w, http.StatusMethodNotAllowed, ERROR, http.StatusText(http.StatusMethodNotAllowed), "")
+		sendFallbackIfError(w, err)
 		return
 	}
 
 	birthdayDocument, err := parseRequestBody[db.BirthdayDocument](r)
 	if err != nil {
-		buildAndSendResponse(w, http.StatusBadRequest, ERROR, "Failed to parse body of request", "")
+		err := buildAndSendResponse(w, http.StatusBadRequest, ERROR, "Failed to parse body of request", "")
+		sendFallbackIfError(w, err)
 		return
 	}
 
 	exists, err := birthdayExists(s, birthdayDocument.GuildUserPair)
 	if err != nil {
-		buildAndSendResponse(w, http.StatusInternalServerError, ERROR, "Failed when checking db for birthday", "")
+		err := buildAndSendResponse(w, http.StatusInternalServerError, ERROR, "Failed when checking db for birthday", "")
+		sendFallbackIfError(w, err)
 		return
 	}
 
@@ -222,25 +225,28 @@ func (s *Server) deleteBirthday(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		log.StatusPrintf(logger.ERROR, "%s", http.StatusText(http.StatusMethodNotAllowed))
 		w.Header().Set("Allow", http.MethodDelete)
-		buildAndSendResponse(w, http.StatusMethodNotAllowed, ERROR, http.StatusText(http.StatusMethodNotAllowed), "")
+		err := buildAndSendResponse(w, http.StatusMethodNotAllowed, ERROR, http.StatusText(http.StatusMethodNotAllowed), "")
+		sendFallbackIfError(w, err)
 		return
 	}
 
 	// parsing body of request
 	guildUserPair, err := parseRequestBody[db.GuildUserPair](r)
 	if err != nil {
-		buildAndSendResponse(w, http.StatusBadRequest, ERROR, "Failed to parse body of request", "")
+		err = buildAndSendResponse(w, http.StatusBadRequest, ERROR, "Failed to parse body of request", "")
+		sendFallbackIfError(w, err)
 		return
 	}
 
 	exists, err := birthdayExists(s, guildUserPair)
 	if err != nil {
-		buildAndSendResponse(w, http.StatusInternalServerError, ERROR, "Failed when checking db for birthday", "")
+		err = buildAndSendResponse(w, http.StatusInternalServerError, ERROR, "Failed when checking db for birthday", "")
+		sendFallbackIfError(w, err)
 		return
 	}
 
 	if !exists {
-		err := buildAndSendResponse(w, http.StatusOK, CONFLICT, "Birthday does not exist", "")
+		err = buildAndSendResponse(w, http.StatusOK, CONFLICT, "Birthday does not exist", "")
 		sendFallbackIfError(w, err)
 		return
 	}
@@ -257,17 +263,59 @@ func (s *Server) deleteBirthday(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = buildAndSendResponse(w, http.StatusOK, SUCCESS, "Successfully added birthday", "")
+	err = buildAndSendResponse(w, http.StatusOK, SUCCESS, "Successfully deleted birthday", "")
 	sendFallbackIfError(w, err)
 }
 
 func (s *Server) checkForBirthday(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received request of type: %s", r.Method)
 	if r.Method != http.MethodGet {
-
-	} else {
-
+		log.StatusPrintf(logger.ERROR, "%s", http.StatusText(http.StatusMethodNotAllowed))
+		w.Header().Set("Allow", http.MethodGet)
+		err := buildAndSendResponse(w, http.StatusMethodNotAllowed, ERROR, http.StatusText(http.StatusMethodNotAllowed), "")
+		sendFallbackIfError(w, err)
+		return
 	}
+
+	params := r.URL.Query()
+	guildId := params.Get("GuildId")
+	userId := params.Get("UserId")
+	log.Printf("Guild Id:\n%s", guildId)
+	log.Printf("User Id:\n%s", userId)
+
+	// guildUserPair, err := parseRequestBody[db.GuildUserPair](r)
+	// if err != nil {
+	// 	err = buildAndSendResponse(w, http.StatusBadRequest, ERROR, "Failed to parse body of request", "")
+	// 	sendFallbackIfError(w, err)
+	// 	return
+	// }
+
+	// creating filter
+	filter := bson.M{
+		"guilduserpair.guildid": guildId,
+		"guilduserpair.userid":  userId,
+	}
+
+	// checking if birthday exists
+	result, err := s.Database.FindOne(context.TODO(), filter)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			err = buildAndSendResponse(w, http.StatusOK, SUCCESS, "Birthday does not exist", "")
+			sendFallbackIfError(w, err)
+			return
+		}
+		err = buildAndSendResponse(w, http.StatusInternalServerError, ERROR, "Failed when checking db for birthday", "")
+		sendFallbackIfError(w, err)
+		return
+	}
+	bodyAsJson, err := json.Marshal(result)
+	log.Printf("Marhsaled data:\n%s", string(bodyAsJson))
+	if err != nil {
+		err = buildAndSendResponse(w, http.StatusInternalServerError, ERROR, "Failed to marshal birthday", "")
+		sendFallbackIfError(w, err)
+		return
+	}
+	err = buildAndSendResponse(w, http.StatusOK, SUCCESS, "Birthday exists", string(bodyAsJson))
+	sendFallbackIfError(w, err)
 }
 
 func (s *Server) getActiveBirthdays(w http.ResponseWriter, r *http.Request) {
@@ -280,12 +328,40 @@ func (s *Server) getActiveBirthdays(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) updateBirthday(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received request of type: %s", r.Method)
-	if r.Method != http.MethodPost {
-
-	} else {
-
+	if r.Method != http.MethodPut {
+		log.StatusPrintf(logger.ERROR, "%s", http.StatusText(http.StatusMethodNotAllowed))
+		w.Header().Set("Allow", http.MethodPut)
+		buildAndSendResponse(w, http.StatusMethodNotAllowed, ERROR, http.StatusText(http.StatusMethodNotAllowed), "")
+		return
 	}
+
+	birthdayDocument, err := parseRequestBody[db.BirthdayDocument](r)
+	if err != nil {
+		buildAndSendResponse(w, http.StatusBadRequest, ERROR, "Failed to parse body of request", "")
+		return
+	}
+
+	exists, err := birthdayExists(s, birthdayDocument.GuildUserPair)
+	if err != nil {
+		buildAndSendResponse(w, http.StatusInternalServerError, ERROR, "Failed when checking db for birthday", "")
+		return
+	}
+
+	if !exists {
+		err := buildAndSendResponse(w, http.StatusOK, CONFLICT, "Birthday does not exist", "")
+		sendFallbackIfError(w, err)
+		return
+	}
+
+	err = s.Database.ReplaceOne(context.TODO(), birthdayDocument)
+	if err != nil {
+		err = buildAndSendResponse(w, http.StatusInternalServerError, ERROR, err.Error(), "")
+		sendFallbackIfError(w, err)
+		return
+	}
+
+	err = buildAndSendResponse(w, http.StatusOK, SUCCESS, "Successfully replaced birthday", "")
+	sendFallbackIfError(w, err)
 }
 
 func main() {

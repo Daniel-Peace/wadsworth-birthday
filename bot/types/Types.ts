@@ -9,14 +9,14 @@ export interface Command {
 }
 
 export interface GuildUserPair {
-  guildId: string;
-  userId: string;
+  GuildId: string;
+  UserId: string;
 }
 
 export interface BirthdayDocument {
-  guildUserPair: GuildUserPair;
-  day: number;
-  month: number;
+  GuildUserPair: GuildUserPair;
+  Day: number;
+  Month: number;
 }
 
 export interface DatabaseResponse {
