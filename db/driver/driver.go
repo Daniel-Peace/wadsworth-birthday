@@ -158,13 +158,13 @@ func parseRequestBody[T any](r *http.Request) (T, error) {
 }
 
 // Checks if a given birthday exists
-func birthdayExists(s *Server, document db.BirthdayDocument) (bool, error) {
+func birthdayExists(s *Server, document db.GuildUserPair) (bool, error) {
 	log.StatusPrintln(logger.IN_PROGRESS, "Checking if birthday exists...")
 
 	// creating filter
 	filter := bson.M{
-		"guilduserpair.guildid": document.GuildUserPair.GuildId,
-		"guilduserpair.userid":  document.GuildUserPair.UserId,
+		"guilduserpair.guildid": document.GuildId,
+		"guilduserpair.userid":  document.UserId,
 	}
 
 	// checking if birthday exists
@@ -193,7 +193,7 @@ func (s *Server) insertBirthday(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exists, err := birthdayExists(s, birthdayDocument)
+	exists, err := birthdayExists(s, birthdayDocument.GuildUserPair)
 	if err != nil {
 		buildAndSendResponse(w, http.StatusInternalServerError, ERROR, "Failed when checking db for birthday", "")
 		return
@@ -206,6 +206,51 @@ func (s *Server) insertBirthday(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = s.Database.InsertOne(context.TODO(), birthdayDocument)
+	if err != nil {
+		err = buildAndSendResponse(w, http.StatusInternalServerError, ERROR, err.Error(), "")
+		sendFallbackIfError(w, err)
+		return
+	}
+
+	err = buildAndSendResponse(w, http.StatusOK, SUCCESS, "Successfully added birthday", "")
+	sendFallbackIfError(w, err)
+}
+
+// deletes a birthday from the database for a server if it exists
+func (s *Server) deleteBirthday(w http.ResponseWriter, r *http.Request) {
+	// checking for correct http method
+	if r.Method != http.MethodDelete {
+		log.StatusPrintf(logger.ERROR, "%s", http.StatusText(http.StatusMethodNotAllowed))
+		w.Header().Set("Allow", http.MethodDelete)
+		buildAndSendResponse(w, http.StatusMethodNotAllowed, ERROR, http.StatusText(http.StatusMethodNotAllowed), "")
+		return
+	}
+
+	// parsing body of request
+	guildUserPair, err := parseRequestBody[db.GuildUserPair](r)
+	if err != nil {
+		buildAndSendResponse(w, http.StatusBadRequest, ERROR, "Failed to parse body of request", "")
+		return
+	}
+
+	exists, err := birthdayExists(s, guildUserPair)
+	if err != nil {
+		buildAndSendResponse(w, http.StatusInternalServerError, ERROR, "Failed when checking db for birthday", "")
+		return
+	}
+
+	if !exists {
+		err := buildAndSendResponse(w, http.StatusOK, CONFLICT, "Birthday does not exist", "")
+		sendFallbackIfError(w, err)
+		return
+	}
+
+	filter := bson.M{
+		"guilduserpair.guildid": guildUserPair.GuildId,
+		"guilduserpair.userid":  guildUserPair.UserId,
+	}
+
+	err = s.Database.DeleteOne(context.TODO(), filter)
 	if err != nil {
 		err = buildAndSendResponse(w, http.StatusInternalServerError, ERROR, err.Error(), "")
 		sendFallbackIfError(w, err)
@@ -263,7 +308,7 @@ func main() {
 	http.HandleFunc("/get-active-bday", server.getActiveBirthdays)
 	http.HandleFunc("/update-bday", server.updateBirthday)
 	http.HandleFunc("/insert-bday", server.insertBirthday)
-	http.HandleFunc("/delete-bday", server.insertBirthday)
+	http.HandleFunc("/delete-bday", server.deleteBirthday)
 
 	// starting http server
 	log.StatusPrintln(logger.IN_PROGRESS, "Starting http server")
