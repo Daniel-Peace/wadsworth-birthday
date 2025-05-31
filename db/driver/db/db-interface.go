@@ -7,11 +7,11 @@ import (
 )
 
 type BirthdayDatabase interface {
-	InsertOne(context context.Context, doc BirthdayDocument) error
-	DeleteOne(context context.Context, filter bson.M) error
-	FindOne(context context.Context, filter bson.M) error
-	UpdateOne(context context.Context, filter bson.M) error
-	FindAll(context context.Context, filter bson.M) error
+	InsertBirthday(context context.Context, doc BirthdayDocument) error
+	DeleteBirthday(context context.Context, filter bson.M) error
+	FindBirthday(context context.Context, filter bson.M) (BirthdayDocument, error)
+	ReplaceBirthday(context context.Context, doc BirthdayDocument) error
+	FindAllBirthdays(context context.Context, filter bson.M) ([]BirthdayDocument, error)
 }
 
 type GuildUserPair struct {

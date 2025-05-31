@@ -31,7 +31,7 @@ func NewMongoDB(client *mongo.Client, database string, collection string, logger
 }
 
 // Inserts the given birthday document
-func (m *MongoDB) InsertOne(context context.Context, doc BirthdayDocument) error {
+func (m *MongoDB) InsertBirthday(context context.Context, doc BirthdayDocument) error {
 	m.Logger.StatusPrintln(logger.IN_PROGRESS, "Inserting document...")
 	coll := m.Client.Database(m.Database).Collection(m.Collection)
 	result, err := coll.InsertOne(context, doc)
@@ -44,7 +44,7 @@ func (m *MongoDB) InsertOne(context context.Context, doc BirthdayDocument) error
 }
 
 // Deletes the first document that matches the provided filter
-func (m *MongoDB) DeleteOne(context context.Context, filter bson.M) error {
+func (m *MongoDB) DeleteBirthday(context context.Context, filter bson.M) error {
 	m.Logger.StatusPrintln(logger.IN_PROGRESS, "Deleting document...")
 	coll := m.Client.Database(m.Database).Collection(m.Collection)
 	result, err := coll.DeleteOne(context, filter)
@@ -56,8 +56,8 @@ func (m *MongoDB) DeleteOne(context context.Context, filter bson.M) error {
 	return err
 }
 
-// Finds the first doc matching the given filter
-func (m *MongoDB) FindOne(context context.Context, filter bson.M) (BirthdayDocument, error) {
+// Retreives the first birthday that matches the filter
+func (m *MongoDB) FindBirthday(context context.Context, filter bson.M) (BirthdayDocument, error) {
 	m.Logger.Printf("[%s] [%s]",
 		custom_utils.ColorizeString("FindOne", custom_utils.Magenta),
 		custom_utils.ColorizeString(custom_utils.WORKING_STATUS, custom_utils.Yellow),
@@ -83,7 +83,7 @@ func (m *MongoDB) FindOne(context context.Context, filter bson.M) (BirthdayDocum
 	return birthday, err
 }
 
-func (m *MongoDB) ReplaceOne(context context.Context, doc BirthdayDocument) error {
+func (m *MongoDB) ReplaceBirthday(context context.Context, doc BirthdayDocument) error {
 	m.Logger.StatusPrintln(logger.IN_PROGRESS, "Replacing document...")
 	coll := m.Client.Database(m.Database).Collection(m.Collection)
 
@@ -104,7 +104,7 @@ func (m *MongoDB) ReplaceOne(context context.Context, doc BirthdayDocument) erro
 /*
  * Finds all docs matching the filter
  */
-func (m *MongoDB) FindAll(context context.Context, filter bson.M) ([]BirthdayDocument, error) {
+func (m *MongoDB) FindAllBirthdays(context context.Context, filter bson.M) ([]BirthdayDocument, error) {
 	m.Logger.Printf("[%s] [%s]",
 		custom_utils.ColorizeString("FindAll", custom_utils.Magenta),
 		custom_utils.ColorizeString(custom_utils.WORKING_STATUS, custom_utils.Yellow),
