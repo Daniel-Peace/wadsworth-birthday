@@ -168,7 +168,7 @@ func birthdayExists(s *Server, document db.GuildUserPair) (bool, error) {
 	}
 
 	// checking if birthday exists
-	_, err := s.Database.FindOne(context.TODO(), filter)
+	_, err := s.Database.FindBirthday(context.TODO(), filter)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return false, nil
@@ -208,7 +208,7 @@ func (s *Server) insertBirthday(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = s.Database.InsertOne(context.TODO(), birthdayDocument)
+	err = s.Database.InsertBirthday(context.TODO(), birthdayDocument)
 	if err != nil {
 		err = buildAndSendResponse(w, http.StatusInternalServerError, ERROR, err.Error(), "")
 		sendFallbackIfError(w, err)
@@ -256,7 +256,7 @@ func (s *Server) deleteBirthday(w http.ResponseWriter, r *http.Request) {
 		"guilduserpair.userid":  guildUserPair.UserId,
 	}
 
-	err = s.Database.DeleteOne(context.TODO(), filter)
+	err = s.Database.DeleteBirthday(context.TODO(), filter)
 	if err != nil {
 		err = buildAndSendResponse(w, http.StatusInternalServerError, ERROR, err.Error(), "")
 		sendFallbackIfError(w, err)
@@ -282,13 +282,6 @@ func (s *Server) checkForBirthday(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Guild Id:\n%s", guildId)
 	log.Printf("User Id:\n%s", userId)
 
-	// guildUserPair, err := parseRequestBody[db.GuildUserPair](r)
-	// if err != nil {
-	// 	err = buildAndSendResponse(w, http.StatusBadRequest, ERROR, "Failed to parse body of request", "")
-	// 	sendFallbackIfError(w, err)
-	// 	return
-	// }
-
 	// creating filter
 	filter := bson.M{
 		"guilduserpair.guildid": guildId,
@@ -296,7 +289,7 @@ func (s *Server) checkForBirthday(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// checking if birthday exists
-	result, err := s.Database.FindOne(context.TODO(), filter)
+	result, err := s.Database.FindBirthday(context.TODO(), filter)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			err = buildAndSendResponse(w, http.StatusOK, SUCCESS, "Birthday does not exist", "")
@@ -319,12 +312,46 @@ func (s *Server) checkForBirthday(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getActiveBirthdays(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received request of type: %s", r.Method)
 	if r.Method != http.MethodGet {
-
-	} else {
-
+		log.StatusPrintf(logger.ERROR, "%s", http.StatusText(http.StatusMethodNotAllowed))
+		w.Header().Set("Allow", http.MethodGet)
+		buildAndSendResponse(w, http.StatusMethodNotAllowed, ERROR, http.StatusText(http.StatusMethodNotAllowed), "")
+		return
 	}
+
+	// creating filter
+	// filter := bson.M{
+	// 	"guilduserpair.guildid": guildId,
+	// 	"guilduserpair.userid":  userId,
+	// }
+
+	filter := bson.M{
+		"day":   31,
+		"month": 10,
+	}
+
+	result, err := s.Database.FindAllBirthdays(context.TODO(), filter)
+	if err != nil {
+		err = buildAndSendResponse(w, http.StatusInternalServerError, ERROR, err.Error(), "")
+		sendFallbackIfError(w, err)
+		return
+	}
+
+	if len(result) > 0 {
+		bodyAsJson, err := json.Marshal(result)
+		log.Printf("Marhsaled data:\n%s", string(bodyAsJson))
+		if err != nil {
+			err = buildAndSendResponse(w, http.StatusInternalServerError, ERROR, "Failed to marshal birthday", "")
+			sendFallbackIfError(w, err)
+			return
+		}
+		err = buildAndSendResponse(w, http.StatusOK, SUCCESS, "Found some active birthdays", string(bodyAsJson))
+		sendFallbackIfError(w, err)
+	} else {
+		err = buildAndSendResponse(w, http.StatusOK, SUCCESS, "No active birthdays found", "")
+		sendFallbackIfError(w, err)
+	}
+
 }
 
 func (s *Server) updateBirthday(w http.ResponseWriter, r *http.Request) {
@@ -353,7 +380,7 @@ func (s *Server) updateBirthday(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = s.Database.ReplaceOne(context.TODO(), birthdayDocument)
+	err = s.Database.ReplaceBirthday(context.TODO(), birthdayDocument)
 	if err != nil {
 		err = buildAndSendResponse(w, http.StatusInternalServerError, ERROR, err.Error(), "")
 		sendFallbackIfError(w, err)
