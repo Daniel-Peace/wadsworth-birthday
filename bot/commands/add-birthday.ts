@@ -70,7 +70,7 @@ export async function execute(interaction: any) {
 }
 
 async function put_birthday(doc: BirthdayDocument): Promise<DatabaseResponse> {
-  const response = await fetch("http://localhost:9000/insert-bday", {
+  const response = await fetch("http://localhost:9000/save-birthday", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",

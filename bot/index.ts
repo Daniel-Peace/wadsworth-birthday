@@ -54,70 +54,70 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-scheduleNextDailyRun();
+// scheduleNextDailyRun();
 
-wishPeopleAHappyBirthday();
+// wishPeopleAHappyBirthday();
 
 client.login(token);
 
-function scheduleNextDailyRun() {
-  const now = new Date();
-  const nextRun = new Date();
+// function scheduleNextDailyRun() {
+//   const now = new Date();
+//   const nextRun = new Date();
 
-  nextRun.setHours(8, 0, 0, 0);
+//   nextRun.setHours(8, 0, 0, 0);
 
-  if (now >= nextRun) {
-    nextRun.setDate(nextRun.getDate() + 1);
-  }
+//   if (now >= nextRun) {
+//     nextRun.setDate(nextRun.getDate() + 1);
+//   }
 
-  const msUntilNextRun = nextRun.getTime() - now.getTime();
-  console.log("Next run in", msUntilNextRun / 1000, "seconds");
+//   const msUntilNextRun = nextRun.getTime() - now.getTime();
+//   console.log("Next run in", msUntilNextRun / 1000, "seconds");
 
-  setTimeout(async () => {
-    await wishPeopleAHappyBirthday();
-    scheduleNextDailyRun();
-  }, msUntilNextRun);
-}
+//   setTimeout(async () => {
+//     await wishPeopleAHappyBirthday();
+//     scheduleNextDailyRun();
+//   }, msUntilNextRun);
+// }
 
-async function wishPeopleAHappyBirthday() {
-  const birthdays = await getActiveBirthdays();
-  for (const birthday of birthdays) {
-    const guild = await client.guilds.fetch(birthday.GuildUserPair.GuildId);
-    const systemChannelId = guild.systemChannelId;
-    if (systemChannelId) {
-      const systemChannel = await guild.channels.fetch(systemChannelId);
-      if (systemChannel && systemChannel.isTextBased()) {
-        await systemChannel.send(
-          `Happy Birthday ${birthday.GuildUserPair.UserId}`,
-        );
-        console.log("Message sent.");
-      } else {
-        console.log(
-          "System channel is not text-based or could not be fetched.",
-        );
-      }
-    } else {
-      console.log("No system channel set for this guild.");
-    }
+// async function wishPeopleAHappyBirthday() {
+//   const birthdays = await getActiveBirthdays();
+//   for (const birthday of birthdays) {
+//     const guild = await client.guilds.fetch(birthday.GuildUserPair.GuildId);
+//     const systemChannelId = guild.systemChannelId;
+//     if (systemChannelId) {
+//       const systemChannel = await guild.channels.fetch(systemChannelId);
+//       if (systemChannel && systemChannel.isTextBased()) {
+//         await systemChannel.send(
+//           `Happy Birthday ${birthday.GuildUserPair.UserId}`,
+//         );
+//         console.log("Message sent.");
+//       } else {
+//         console.log(
+//           "System channel is not text-based or could not be fetched.",
+//         );
+//       }
+//     } else {
+//       console.log("No system channel set for this guild.");
+//     }
 
-    console.log(birthday);
-  }
-}
+//     console.log(birthday);
+//   }
+// }
 
-async function getActiveBirthdays(): Promise<BirthdayDocument[]> {
-  console.log("getting active birthdays...");
-  const response = await fetch("http://localhost:9000/get-active-bday", {
-    method: "GET",
-  });
+// async function getActiveBirthdays(): Promise<BirthdayDocument[]> {
+//   console.log("getting active birthdays...");
+//   const response = await fetch("http://localhost:9000/get-active-bday", {
+//     method: "GET",
+//   });
 
-  console.log(response);
+//   console.log(response);
 
-  const data = await response.json();
-  const databaseResponse = data as DatabaseResponse;
+//   const data = await response.json();
+//   const databaseResponse = data as DatabaseResponse;
 
-  if (databaseResponse.Data !== "") {
-    return JSON.parse(databaseResponse.Data) as BirthdayDocument[];
-  } else {
-    return [];
-  }
-}
+//   if (databaseResponse.Data !== "") {
+//     return JSON.parse(databaseResponse.Data) as BirthdayDocument[];
+//   } else {
+//     return [];
+//   }
+// }

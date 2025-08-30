@@ -24,3 +24,9 @@ export interface DatabaseResponse {
   Description: string;
   Data: string;
 }
+
+export interface GuildConfig {
+  GuildId: string;
+  RoleId: string;
+  ChannelId: string;
+}
